@@ -8,7 +8,7 @@ describe('Phase 1 E2E Collaborative Healthcare Journey', () => {
     // 1. Verify elderly user & profile setup
     const elderlyProfile = Array.from(store.elderlyProfiles.values())[0];
     expect(elderlyProfile).toBeDefined();
-    expect(elderlyProfile.fullName).toBe('Margaret Sharma');
+    expect(elderlyProfile.fullName).toBe('Amitabh Bachchan');
 
     // 2. Care circle contains elderly owner, caregiver Sarah, and family Ramesh
     const circle = Array.from(store.careCircles.values()).find(
@@ -86,11 +86,11 @@ describe('Phase 1 E2E Collaborative Healthcare Journey', () => {
     const selfConfirmRes = store.recordDoseAction(
       morningDose!.id,
       'usr-margaret',
-      'Margaret Sharma',
+      'Amitabh Bachchan',
       'self_confirmed'
     );
     expect(selfConfirmRes.doseEvent.status).toBe('taken');
-    expect(selfConfirmRes.doseEvent.resolvedByName).toBe('Margaret Sharma');
+    expect(selfConfirmRes.doseEvent.resolvedByName).toBe('Amitabh Bachchan');
 
     // 6. Caregiver administers evening dose on web dashboard
     const eveningDose = todayEvents.find((e) => e.routineCategory === 'evening');
@@ -111,7 +111,7 @@ describe('Phase 1 E2E Collaborative Healthcare Journey', () => {
     const dupRes = store.recordDoseAction(
       eveningDose!.id,
       'usr-margaret',
-      'Margaret Sharma',
+      'Amitabh Bachchan',
       'self_confirmed'
     );
     expect(dupRes.duplicateWarning).toBe(true);
