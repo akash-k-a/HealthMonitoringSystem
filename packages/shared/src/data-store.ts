@@ -661,7 +661,7 @@ export class InMemoryPlatformDataStore {
     const elderlyUser: UserProfile = {
       id: 'usr-margaret',
       email: 'margaret.sharma@example.com',
-      fullName: 'Margaret Sharma',
+      fullName: 'Amitabh Bachchan',
       role: 'elderly',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -671,7 +671,7 @@ export class InMemoryPlatformDataStore {
     const caregiverUser: UserProfile = {
       id: 'usr-sarah',
       email: 'sarah.caregiver@example.com',
-      fullName: 'Sarah Jenkins',
+      fullName: 'Aishwarya Rai',
       role: 'caregiver',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -681,7 +681,7 @@ export class InMemoryPlatformDataStore {
     const familyUser: UserProfile = {
       id: 'usr-ramesh',
       email: 'ramesh.sharma@example.com',
-      fullName: 'Ramesh Sharma',
+      fullName: 'Rohit Sharma',
       role: 'family',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -689,8 +689,8 @@ export class InMemoryPlatformDataStore {
     this.userProfiles.set(familyUser.id, familyUser);
 
     const { elderlyProfile, careCircle } = this.createElderlyProfile(elderlyUser.id, {
-      fullName: 'Margaret Sharma',
-      preferredName: 'Margaret',
+      fullName: 'Amitabh Bachchan',
+      preferredName: 'Amitabh',
       dateOfBirth: '1948-06-12',
       bloodGroup: 'O+',
       allergies: ['Penicillin', 'Sulfa drugs'],
@@ -743,7 +743,7 @@ export class InMemoryPlatformDataStore {
     const emg: EmergencyContact = {
       id: 'emg-1',
       elderlyProfileId: elderlyProfile.id,
-      name: 'Ramesh Sharma (Son)',
+      name: 'Rohit Sharma (Son)',
       relationship: 'Son',
       phoneNumber: '+91 98765 43210',
       priorityOrder: 1,
@@ -813,7 +813,7 @@ export class InMemoryPlatformDataStore {
       locationAddress: 'Room 204, City Care Hospital, MG Road',
       appointmentTime: tomorrow.toISOString(),
       purpose: 'Routine heart check-up & BP review',
-      transportNotes: 'Ramesh will pick up at 9:45 AM',
+      transportNotes: 'Rohit will pick up at 9:45 AM',
       preparationChecklist: [
         'Bring printed medicine list',
         'Bring blood-pressure readings',

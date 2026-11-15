@@ -11,7 +11,7 @@ describe('Platform Data Store Tests', () => {
   it('initializes with seed data correctly', () => {
     expect(store.elderlyProfiles.size).toBe(1);
     const profile = Array.from(store.elderlyProfiles.values())[0];
-    expect(profile.fullName).toBe('Margaret Sharma');
+    expect(profile.fullName).toBe('Amitabh Bachchan');
     expect(profile.allergies).toContain('Penicillin');
 
     // 2 seed medications
@@ -35,19 +35,19 @@ describe('Platform Data Store Tests', () => {
     const res = store.recordDoseAction(
       morningEvent.id,
       'usr-margaret',
-      'Margaret Sharma',
+      'Amitabh Bachchan',
       'self_confirmed'
     );
 
     expect(res.doseEvent.status).toBe('taken');
     expect(res.doseEvent.resolutionMethod).toBe('self_confirmed');
-    expect(res.doseEvent.resolvedByName).toBe('Margaret Sharma');
+    expect(res.doseEvent.resolvedByName).toBe('Amitabh Bachchan');
 
     // Elderly hits undo
     const undoRes = store.undoDoseAction(
       morningEvent.id,
       'usr-margaret',
-      'Margaret Sharma',
+      'Amitabh Bachchan',
       'Accidentally pressed taken'
     );
 
@@ -99,7 +99,7 @@ describe('Platform Data Store Tests', () => {
     const duplicateRes = store.recordDoseAction(
       testEvent.id,
       'usr-margaret',
-      'Margaret Sharma',
+      'Amitabh Bachchan',
       'self_confirmed'
     );
 
