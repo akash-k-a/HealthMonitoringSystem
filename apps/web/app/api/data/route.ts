@@ -136,6 +136,21 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: true, invitation: result });
       }
 
+      case 'CREATE_PATIENT': {
+        const { ownerUserId, fullName, preferredName, dateOfBirth, bloodGroup, allergies, medicalConditions } = payload;
+        const result = platformDataStore.createElderlyProfile(ownerUserId || 'usr-sarah', {
+          fullName,
+          preferredName,
+          dateOfBirth,
+          bloodGroup,
+          allergies: allergies || [],
+          medicalConditions: medicalConditions || [],
+          quietHoursStart: '22:00',
+          quietHoursEnd: '07:00'
+        });
+        return NextResponse.json({ success: true, ...result });
+      }
+
       default:
         return NextResponse.json({ error: `Unknown action ${action}` }, { status: 400 });
     }

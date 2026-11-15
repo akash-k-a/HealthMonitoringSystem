@@ -60,6 +60,17 @@ export function CaregiverDashboardView({
   const [showInviteModal, setShowInviteModal] = useState<boolean>(false);
   const [showAddAptModal, setShowAddAptModal] = useState<boolean>(false);
 
+  // Add Medication form states
+  const [medName, setMedName] = useState('');
+  const [medStrength, setMedStrength] = useState('');
+  const [medForm, setMedForm] = useState<'tablet' | 'capsule' | 'liquid' | 'injection' | 'drops' | 'inhaler'>('tablet');
+  const [medDoseAmount, setMedDoseAmount] = useState('1 tablet');
+  const [medFood, setMedFood] = useState<'with_food' | 'before_food' | 'after_food' | 'no_food_restriction'>('with_food');
+  const [medScheduleType, setMedScheduleType] = useState<'daily' | 'as_needed'>('daily');
+  const [medDoseTime, setMedDoseTime] = useState('08:00');
+  const [medPurpose, setMedPurpose] = useState('');
+  const [medInstructions, setMedInstructions] = useState('');
+
   // Form states
   const [noteContent, setNoteContent] = useState('');
   const [noteCategory, setNoteCategory] = useState<'general' | 'vital_signs' | 'mood' | 'meal' | 'concern'>('general');
@@ -71,6 +82,33 @@ export function CaregiverDashboardView({
   const takenDoses = events.filter((e) => e.status === 'taken').length;
   const pendingDoses = events.filter((e) => e.status === 'scheduled' || e.status === 'due');
   const duplicateWarnings = events.filter((e) => e.hasDuplicateWarning);
+
+  const handleSaveMedication = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!medName || !medStrength) return;
+    await onAddMedication(
+      {
+        name: medName,
+        strength: medStrength,
+        form: medForm,
+        doseAmount: medDoseAmount,
+        instructions: medInstructions || `Take ${medDoseAmount} ${medFood.replace('_', ' ')}`,
+        foodInstructions: medFood,
+        purpose: medPurpose || 'Prescribed therapy',
+        isActive: true
+      },
+      {
+        scheduleType: medScheduleType,
+        doseTimes: medScheduleType === 'daily' ? [medDoseTime] : [],
+        startDate: new Date().toISOString().split('T')[0]
+      }
+    );
+    setMedName('');
+    setMedStrength('');
+    setMedPurpose('');
+    setMedInstructions('');
+    setShowAddMedModal(false);
+  };
 
   const handleAdminister = async (doseEventId: string) => {
     await onRecordDose(doseEventId, 'caregiver_administered', `Administered by ${currentActor.name}`);
@@ -216,10 +254,19 @@ export function CaregiverDashboardView({
       {activeTab === 'schedule' && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-            <h2 className="text-lg font-bold text-slate-900">Scheduled Medications & Doses</h2>
-            <span className="text-xs text-slate-500 font-medium">
-              Universal shared editing enabled — all changes are auditable.
-            </span>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Scheduled Medications & Doses</h2>
+              <span className="text-xs text-slate-500 font-medium">
+                Universal shared editing enabled — all changes are auditable.
+              </span>
+            </div>
+            <button
+              onClick={() => setShowAddMedModal(true)}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Medication</span>
+            </button>
           </div>
 
           <div className="divide-y divide-slate-100">
@@ -423,6 +470,151 @@ export function CaregiverDashboardView({
                 </span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Add Medication */}
+      {showAddMedModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
+            <h3 className="text-xl font-bold text-slate-900">Add New Medication</h3>
+            <p className="text-xs text-slate-600">
+              Prescribed medications are shared across all authorized circle members and automatically generate daily dose routines.
+            </p>
+            <form onSubmit={handleSaveMedication} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold uppercase text-slate-600">Medication Name</label>
+                  <input
+                    type="text"
+                    value={medName}
+                    onChange={(e) => setMedName(e.target.value)}
+                    placeholder="e.g. Atorvastatin"
+                    className="w-full mt-1 p-2.5 border border-slate-300 rounded-xl text-sm"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase text-slate-600">Strength</label>
+                  <input
+                    type="text"
+                    value={medStrength}
+                    onChange={(e) => setMedStrength(e.target.value)}
+                    placeholder="e.g. 10 mg"
+                    className="w-full mt-1 p-2.5 border border-slate-300 rounded-xl text-sm"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold uppercase text-slate-600">Form</label>
+                  <select
+                    value={medForm}
+                    onChange={(e: any) => setMedForm(e.target.value)}
+                    className="w-full mt-1 p-2.5 border border-slate-300 rounded-xl text-sm font-medium"
+                  >
+                    <option value="tablet">Tablet</option>
+                    <option value="capsule">Capsule</option>
+                    <option value="liquid">Liquid</option>
+                    <option value="injection">Injection</option>
+                    <option value="drops">Drops</option>
+                    <option value="inhaler">Inhaler</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase text-slate-600">Dose Amount</label>
+                  <input
+                    type="text"
+                    value={medDoseAmount}
+                    onChange={(e) => setMedDoseAmount(e.target.value)}
+                    placeholder="e.g. 1 tablet"
+                    className="w-full mt-1 p-2.5 border border-slate-300 rounded-xl text-sm"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold uppercase text-slate-600">Food Instruction</label>
+                  <select
+                    value={medFood}
+                    onChange={(e: any) => setMedFood(e.target.value)}
+                    className="w-full mt-1 p-2.5 border border-slate-300 rounded-xl text-sm font-medium"
+                  >
+                    <option value="with_food">With meal / food</option>
+                    <option value="before_food">Before food (empty stomach)</option>
+                    <option value="after_food">After meal</option>
+                    <option value="no_food_restriction">No food restriction</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase text-slate-600">Schedule Type</label>
+                  <select
+                    value={medScheduleType}
+                    onChange={(e: any) => setMedScheduleType(e.target.value)}
+                    className="w-full mt-1 p-2.5 border border-slate-300 rounded-xl text-sm font-medium"
+                  >
+                    <option value="daily">Daily Scheduled</option>
+                    <option value="as_needed">As Needed (PRN)</option>
+                  </select>
+                </div>
+              </div>
+
+              {medScheduleType === 'daily' && (
+                <div>
+                  <label className="text-xs font-bold uppercase text-slate-600">Daily Dose Time</label>
+                  <input
+                    type="time"
+                    value={medDoseTime}
+                    onChange={(e) => setMedDoseTime(e.target.value)}
+                    className="w-full mt-1 p-2.5 border border-slate-300 rounded-xl text-sm font-medium"
+                    required
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="text-xs font-bold uppercase text-slate-600">Purpose / Why Taking</label>
+                <input
+                  type="text"
+                  value={medPurpose}
+                  onChange={(e) => setMedPurpose(e.target.value)}
+                  placeholder="e.g. For cholesterol control"
+                  className="w-full mt-1 p-2.5 border border-slate-300 rounded-xl text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase text-slate-600">Instructions / Notes</label>
+                <input
+                  type="text"
+                  value={medInstructions}
+                  onChange={(e) => setMedInstructions(e.target.value)}
+                  placeholder="e.g. Take at bedtime with a glass of water"
+                  className="w-full mt-1 p-2.5 border border-slate-300 rounded-xl text-sm"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddMedModal(false)}
+                  className="px-4 py-2 text-slate-600 text-sm font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm"
+                >
+                  Save Medication
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
