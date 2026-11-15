@@ -8,6 +8,7 @@ export default function RootLayout() {
       <StatusBar style="light" backgroundColor="#047857" />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(elderly)" />
+        <Stack.Screen name="(family)" />
       </Stack>
     </SafeAreaProvider>
   );
