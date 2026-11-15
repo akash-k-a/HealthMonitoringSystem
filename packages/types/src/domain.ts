@@ -4,6 +4,8 @@ export type CircleRole = 'owner' | 'caregiver' | 'family' | 'clinician';
 
 export type CircleMemberStatus = 'active' | 'pending' | 'revoked';
 
+export type SupportedLanguage = 'en' | 'ml'; // English and Malayalam
+
 export type MedicationForm = 
   | 'tablet' 
   | 'capsule' 
@@ -78,6 +80,7 @@ export interface ElderlyProfile {
   careNotes?: string;
   quietHoursStart?: string; // e.g. "22:00"
   quietHoursEnd?: string;   // e.g. "07:00"
+  preferredLanguage?: SupportedLanguage;
   createdAt: string;
   updatedAt: string;
 }
@@ -89,6 +92,14 @@ export interface CareCircle {
   createdAt: string;
 }
 
+export interface CirclePermissions {
+  canEditMedications: boolean;
+  canAdministerDoses: boolean;
+  canEditAppointments: boolean;
+  canViewVitals: boolean;
+  canManageCircle: boolean;
+}
+
 export interface CareCircleMember {
   id: string;
   circleId: string;
@@ -96,6 +107,7 @@ export interface CareCircleMember {
   user?: UserProfile;
   role: CircleRole;
   canEdit: boolean;
+  permissions?: CirclePermissions;
   status: CircleMemberStatus;
   joinedAt: string;
 }
@@ -112,6 +124,27 @@ export interface CircleInvitation {
   createdAt: string;
 }
 
+export interface MedicationEducation {
+  purposePlainLanguage: string;
+  howItWorks: string;
+  commonSideEffects: string[];
+  foodAndDrinkAdvice: string;
+  missedDoseInstructions?: string;
+  missedDoseAdvice?: string;
+}
+
+export interface MedicationInventory {
+  id: string;
+  medicationId: string;
+  currentStock: number; // pill count
+  unit: string; // 'tablets', 'capsules', 'ml', 'puffs'
+  lowStockThreshold: number; // e.g. 7 days
+  reorderQuantity: number;
+  lastRefilledDate?: string;
+  pharmacyName?: string;
+  pharmacyPhone?: string;
+}
+
 export interface Medication {
   id: string;
   elderlyProfileId: string;
@@ -120,12 +153,14 @@ export interface Medication {
   strength: string; // e.g. "500 mg"
   form: MedicationForm;
   doseAmount: string; // e.g. "1 tablet"
-  instructions?: string; // e.g. "Take with morning meal"
+  instructions?: string;
   foodInstructions?: 'with_food' | 'before_food' | 'after_food' | 'no_food_restriction';
   prescriberName?: string;
-  instructionSource?: string; // e.g. "Prescription from Dr. Mehta"
-  purpose?: string; // e.g. "For blood pressure control"
+  instructionSource?: string;
+  purpose?: string;
   isActive: boolean;
+  education?: MedicationEducation;
+  inventory?: MedicationInventory;
   createdAt: string;
   updatedAt: string;
   activeSchedule?: MedicationSchedule;
@@ -214,14 +249,81 @@ export interface CareNote {
   authorName: string;
   category: 'general' | 'vital_signs' | 'mood' | 'meal' | 'mobility' | 'concern' | 'handoff';
   content: string;
+  visibility: 'circle_all' | 'caregivers_only';
   vitalSigns?: {
     bloodPressureSystolic?: number;
     bloodPressureDiastolic?: number;
     heartRate?: number;
     bloodSugar?: number;
     temperature?: number;
+    spO2?: number; // Blood oxygen %
   };
   createdAt: string;
+}
+
+export interface DailyHealthCheckin {
+  id: string;
+  elderlyProfileId: string;
+  date: string; // YYYY-MM-DD
+  mood: 'great' | 'good' | 'okay' | 'low' | 'unwell';
+  painLevel: number; // 0 to 10
+  energyLevel: 'high' | 'normal' | 'tired' | 'exhausted';
+  sleepQuality: 'well_rested' | 'interrupted' | 'poor';
+  notes?: string;
+  recordedAt: string;
+}
+
+export interface ShiftHandoff {
+  id: string;
+  elderlyProfileId: string;
+  outgoingCaregiverId: string;
+  outgoingCaregiverName: string;
+  incomingCaregiverName?: string;
+  shiftStart: string;
+  shiftEnd: string;
+  dosesAdministeredCount: number;
+  pendingDosesCount: number;
+  missedDosesCount: number;
+  observationsSummary: string;
+  concernsOrAlerts: string;
+  refillsNeeded: string[];
+  nextShiftActions: string[];
+  isAcknowledged: boolean;
+  acknowledgedAt?: string;
+  createdAt: string;
+}
+
+export interface MedicationRiskFlag {
+  id: string;
+  medicationId: string;
+  elderlyProfileId: string;
+  riskType: 'duplicate_therapy' | 'food_timing_conflict' | 'low_adherence_risk' | 'expiring_refill';
+  severity: 'low' | 'moderate' | 'high';
+  title: string;
+  description: string;
+  recommendation: string;
+  createdAt: string;
+}
+
+export interface AbdmProfile {
+  id: string;
+  elderlyProfileId: string;
+  abhaNumber: string; // e.g. 14-digit ABHA number
+  abhaAddress: string; // e.g. margaret@abdm
+  verificationStatus: 'verified' | 'pending';
+  linkedFacilities: string[];
+  linkedRecordsCount: number;
+}
+
+export interface SmartPillbox {
+  id: string;
+  elderlyProfileId: string;
+  deviceName: string;
+  serialNumber: string;
+  batteryPercentage: number;
+  connectionStatus: 'connected' | 'disconnected' | 'syncing';
+  lastOpenedTime?: string;
+  compartmentCount: number;
 }
 
 export interface EmergencyContact {
@@ -243,9 +345,9 @@ export interface NotificationRecord {
   recipientUserId: string;
   title: string;
   body: string;
-  type: 'dose_reminder' | 'unconfirmed_escalation' | 'appointment_reminder' | 'duplicate_warning' | 'emergency';
+  type: 'dose_reminder' | 'unconfirmed_escalation' | 'appointment_reminder' | 'duplicate_warning' | 'emergency' | 'refill_alert' | 'handoff';
   relatedEntityId?: string;
-  relatedEntityType?: 'dose_event' | 'appointment' | 'emergency';
+  relatedEntityType?: 'dose_event' | 'appointment' | 'emergency' | 'inventory' | 'handoff';
   isRead: boolean;
   sentAt: string;
 }

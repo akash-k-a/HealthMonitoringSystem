@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Smartphone, Monitor, Users, Shield, RefreshCw, UserPlus, HelpCircle } from 'lucide-react';
+import { Smartphone, Monitor, Users, Shield, RefreshCw, UserPlus, HelpCircle, Globe } from 'lucide-react';
 import { ElderlyTodayView } from '../components/ElderlyTodayView';
 import { CaregiverDashboardView } from '../components/CaregiverDashboardView';
 import { FamilyReassuranceView } from '../components/FamilyReassuranceView';
@@ -13,12 +13,19 @@ import type {
   CareCircleMember,
   EmergencyContact,
   AuditEvent,
-  NotificationRecord
+  NotificationRecord,
+  DailyHealthCheckin,
+  ShiftHandoff,
+  MedicationRiskFlag,
+  AbdmProfile,
+  SmartPillbox,
+  SupportedLanguage
 } from '@elderly-care/types';
 
 export default function HomePage() {
   const [activePersona, setActivePersona] = useState<'elderly' | 'caregiver' | 'family'>('elderly');
   const [selectedProfileId, setSelectedProfileId] = useState<string>('');
+  const [currentLanguage, setCurrentLanguage] = useState<SupportedLanguage>('en');
   const [showAddPatientModal, setShowAddPatientModal] = useState<boolean>(false);
   const [showOnboardingInfoModal, setShowOnboardingInfoModal] = useState<boolean>(false);
 
@@ -41,6 +48,11 @@ export default function HomePage() {
     circleMembers: CareCircleMember[];
     auditEvents: AuditEvent[];
     notifications: NotificationRecord[];
+    checkins: DailyHealthCheckin[];
+    shiftHandoffs: ShiftHandoff[];
+    riskFlags: MedicationRiskFlag[];
+    abdmProfile: AbdmProfile | null;
+    smartPillbox: SmartPillbox | null;
   }>({
     profile: null,
     allProfiles: [],
@@ -50,7 +62,12 @@ export default function HomePage() {
     emergencyContacts: [],
     circleMembers: [],
     auditEvents: [],
-    notifications: []
+    notifications: [],
+    checkins: [],
+    shiftHandoffs: [],
+    riskFlags: [],
+    abdmProfile: null,
+    smartPillbox: null
   });
 
   const fetchData = async (overrideProfileId?: string) => {
@@ -69,8 +86,16 @@ export default function HomePage() {
           emergencyContacts: json.emergencyContacts || [],
           circleMembers: json.circleMembers || [],
           auditEvents: json.auditEvents || [],
-          notifications: json.notifications || []
+          notifications: json.notifications || [],
+          checkins: json.checkins || [],
+          shiftHandoffs: json.shiftHandoffs || [],
+          riskFlags: json.riskFlags || [],
+          abdmProfile: json.abdmProfile || null,
+          smartPillbox: json.smartPillbox || null
         });
+        if (json.profile?.preferredLanguage) {
+          setCurrentLanguage(json.profile.preferredLanguage);
+        }
         if (!selectedProfileId && json.profile) {
           setSelectedProfileId(json.profile.id);
         }
@@ -91,6 +116,25 @@ export default function HomePage() {
   const handleSelectPatient = (id: string) => {
     setSelectedProfileId(id);
     fetchData(id);
+  };
+
+  const handleToggleLanguage = async () => {
+    const nextLang = currentLanguage === 'en' ? 'ml' : 'en';
+    setCurrentLanguage(nextLang);
+    if (data.profile) {
+      data.profile.preferredLanguage = nextLang;
+      await fetch('/api/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'CHANGE_LANGUAGE',
+          payload: {
+            profileId: data.profile.id,
+            language: nextLang
+          }
+        })
+      });
+    }
   };
 
   const handleCreatePatient = async (e: React.FormEvent) => {
@@ -200,6 +244,85 @@ export default function HomePage() {
     await fetchData();
   };
 
+  const handleRefillStock = async (medicationId: string, quantity: number) => {
+    await fetch('/api/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'REFILL_STOCK',
+        payload: {
+          medicationId,
+          addedQuantity: quantity,
+          actorName: 'Sarah Jenkins'
+        }
+      })
+    });
+    await fetchData();
+  };
+
+  const handleCreateHandoff = async (handoffData: any) => {
+    if (!data.profile) return;
+    await fetch('/api/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'CREATE_SHIFT_HANDOFF',
+        payload: {
+          elderlyProfileId: data.profile.id,
+          ...handoffData
+        }
+      })
+    });
+    await fetchData();
+  };
+
+  const handleAcknowledgeHandoff = async (handoffId: string) => {
+    await fetch('/api/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'ACKNOWLEDGE_SHIFT_HANDOFF',
+        payload: {
+          handoffId,
+          acknowledgedByName: 'Priya Nair (Incoming Nurse)'
+        }
+      })
+    });
+    await fetchData();
+  };
+
+  const handleRecordCheckin = async (checkin: any) => {
+    if (!data.profile) return;
+    await fetch('/api/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'RECORD_HEALTH_CHECKIN',
+        payload: {
+          elderlyProfileId: data.profile.id,
+          checkin
+        }
+      })
+    });
+    await fetchData();
+  };
+
+  const handleSimulatePillbox = async () => {
+    if (!data.profile) return;
+    await fetch('/api/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'SIMULATE_PILLBOX_OPEN',
+        payload: {
+          elderlyProfileId: data.profile.id,
+          compartmentNumber: 1
+        }
+      })
+    });
+    await fetchData();
+  };
+
   const handleAddAppointment = async (appointment: any) => {
     if (!data.profile) return;
     await fetch('/api/data', {
@@ -262,11 +385,15 @@ export default function HomePage() {
     );
   }
 
+  // Active checkin for today
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayCheckin = data.checkins.find((c) => c.date === todayStr);
+
   return (
     <div className="min-h-screen bg-slate-100 pb-12">
       {/* Platform Navigation Header */}
       <header className="bg-slate-900 text-white sticky top-0 z-40 shadow-md">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 shrink-0">
             <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center font-black text-xl">
               C
@@ -341,6 +468,16 @@ export default function HomePage() {
             </button>
           </div>
 
+          {/* Multilingual Toggle: English ⇄ മലയാളം */}
+          <button
+            onClick={handleToggleLanguage}
+            title="Toggle Language (English / Malayalam)"
+            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-emerald-300 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-slate-700"
+          >
+            <Globe className="w-3.5 h-3.5 text-emerald-400" />
+            <span>{currentLanguage === 'en' ? 'EN | മലയാളം' : 'മലയാളം | EN'}</span>
+          </button>
+
           <button
             onClick={() => setShowOnboardingInfoModal(true)}
             title="How do patients join?"
@@ -358,7 +495,7 @@ export default function HomePage() {
           <div className="flex items-center gap-2">
             <Shield className="w-4 h-4 text-emerald-600" />
             <span>
-              <strong>One shared care record for {data.profile.fullName}:</strong> Any action taken on the elderly mobile view immediately reflects on the caregiver web view and family digest in real time.
+              <strong>One shared care record for {data.profile.fullName}:</strong> Live connected across Elderly Mobile, Caregiver Dashboard, and Family Digest.
             </span>
           </div>
           <button
@@ -378,12 +515,14 @@ export default function HomePage() {
               </span>
             </div>
             <ElderlyTodayView
-              profile={data.profile}
+              profile={{ ...data.profile, preferredLanguage: currentLanguage }}
               events={data.todayEvents}
               appointments={data.appointments}
               emergencyContacts={data.emergencyContacts}
+              todayCheckin={todayCheckin}
               onRecordDose={handleRecordDose}
               onUndoDose={handleUndoDose}
+              onRecordCheckin={handleRecordCheckin}
             />
           </div>
         )}
@@ -397,12 +536,20 @@ export default function HomePage() {
             circleMembers={data.circleMembers}
             auditEvents={data.auditEvents}
             notifications={data.notifications}
+            shiftHandoffs={data.shiftHandoffs}
+            riskFlags={data.riskFlags}
+            abdmProfile={data.abdmProfile}
+            smartPillbox={data.smartPillbox}
             currentActor={{ id: 'usr-sarah', name: 'Sarah Jenkins', role: 'caregiver' }}
             onRecordDose={handleRecordDose}
             onAddMedication={handleAddMedication}
             onAddAppointment={handleAddAppointment}
             onAddCareNote={handleAddCareNote}
             onInviteMember={handleInviteMember}
+            onRefillStock={handleRefillStock}
+            onCreateHandoff={handleCreateHandoff}
+            onAcknowledgeHandoff={handleAcknowledgeHandoff}
+            onSimulatePillboxOpen={handleSimulatePillbox}
           />
         )}
 

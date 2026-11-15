@@ -15,9 +15,17 @@ import type {
   NotificationRecord,
   AuditEvent,
   DoseStatus,
-  DoseActionType
+  DoseActionType,
+  DailyHealthCheckin,
+  ShiftHandoff,
+  MedicationInventory,
+  MedicationRiskFlag,
+  AbdmProfile,
+  SmartPillbox,
+  SupportedLanguage
 } from '@elderly-care/types';
 import { generateDoseEventsForDateRange, detectDuplicateAdministration } from './schedule-engine';
+import { getMedicationEducation, checkMedicationRisks } from './safety-checker';
 
 export class InMemoryPlatformDataStore {
   public userProfiles: Map<string, UserProfile> = new Map();
@@ -35,6 +43,13 @@ export class InMemoryPlatformDataStore {
   public emergencyContacts: Map<string, EmergencyContact> = new Map();
   public notifications: NotificationRecord[] = [];
   public auditEvents: AuditEvent[] = [];
+
+  // Phase 2, 3, 4, 5 Collections
+  public dailyHealthCheckins: Map<string, DailyHealthCheckin> = new Map();
+  public shiftHandoffs: Map<string, ShiftHandoff> = new Map();
+  public medicationInventories: Map<string, MedicationInventory> = new Map();
+  public abdmProfiles: Map<string, AbdmProfile> = new Map();
+  public smartPillboxes: Map<string, SmartPillbox> = new Map();
 
   private listeners: Array<(event: { type: string; payload: any }) => void> = [];
 
@@ -101,6 +116,7 @@ export class InMemoryPlatformDataStore {
       id: profileId,
       ownerUserId,
       ...data,
+      preferredLanguage: data.preferredLanguage || 'en',
       createdAt: now,
       updatedAt: now
     };
@@ -115,7 +131,6 @@ export class InMemoryPlatformDataStore {
     };
     this.careCircles.set(circleId, circle);
 
-    // Add owner as circle member
     const memberId = `member-${ownerUserId}-${circleId}`;
     const member: CareCircleMember = {
       id: memberId,
@@ -129,8 +144,40 @@ export class InMemoryPlatformDataStore {
     };
     this.careCircleMembers.set(memberId, member);
 
+    // Initialize ABDM Profile
+    const abdm: AbdmProfile = {
+      id: `abdm-${profileId}`,
+      elderlyProfileId: profileId,
+      abhaNumber: `91-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`,
+      abhaAddress: `${(data.preferredName || data.fullName).toLowerCase().replace(/\s+/g, '')}@abdm`,
+      verificationStatus: 'verified',
+      linkedFacilities: ['City Care Hospital', 'Kerala Health Mission Clinic'],
+      linkedRecordsCount: 4
+    };
+    this.abdmProfiles.set(profileId, abdm);
+
+    // Initialize Smart Pillbox
+    const pillbox: SmartPillbox = {
+      id: `box-${profileId}`,
+      elderlyProfileId: profileId,
+      deviceName: 'MedMinder Smart Dispenser Pro',
+      serialNumber: `MM-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+      batteryPercentage: 92,
+      connectionStatus: 'connected',
+      compartmentCount: 7
+    };
+    this.smartPillboxes.set(profileId, pillbox);
+
     this.logAudit(ownerUserId, owner?.fullName || 'Owner', 'CREATE_ELDERLY_PROFILE', 'elderly_profile', profileId, profileId);
     return { elderlyProfile: profile, careCircle: circle };
+  }
+
+  public setPreferredLanguage(profileId: string, lang: SupportedLanguage) {
+    const profile = this.elderlyProfiles.get(profileId);
+    if (profile) {
+      profile.preferredLanguage = lang;
+      this.broadcast('LANGUAGE_CHANGED', { profileId, language: lang });
+    }
   }
 
   public inviteMember(
@@ -185,21 +232,38 @@ export class InMemoryPlatformDataStore {
     return member;
   }
 
-  // --- Medications & Schedules ---
+  // --- Medications, Schedules & Inventory ---
   public addMedication(
     elderlyProfileId: string,
-    medData: Omit<Medication, 'id' | 'elderlyProfileId' | 'createdAt' | 'updatedAt' | 'activeSchedule'>,
+    medData: Omit<Medication, 'id' | 'elderlyProfileId' | 'createdAt' | 'updatedAt' | 'activeSchedule' | 'education' | 'inventory'>,
     scheduleData: Omit<MedicationSchedule, 'id' | 'medicationId' | 'createdAt'>,
     actorId: string,
-    actorName: string
+    actorName: string,
+    initialStock = 30
   ): { medication: Medication; schedule: MedicationSchedule; doseEvents: DoseEvent[] } {
     const medId = `med-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`;
     const now = new Date().toISOString();
+
+    const education = getMedicationEducation(medData.name);
+
+    const inventory: MedicationInventory = {
+      id: `inv-${medId}`,
+      medicationId: medId,
+      currentStock: initialStock,
+      unit: medData.form === 'liquid' ? 'ml' : 'tablets',
+      lowStockThreshold: 7,
+      reorderQuantity: 30,
+      pharmacyName: 'Apollo City Pharmacy',
+      pharmacyPhone: '+91 80 2345 6789'
+    };
+    this.medicationInventories.set(medId, inventory);
 
     const medication: Medication = {
       id: medId,
       elderlyProfileId,
       ...medData,
+      education,
+      inventory,
       createdAt: now,
       updatedAt: now
     };
@@ -245,6 +309,18 @@ export class InMemoryPlatformDataStore {
     return { medication, schedule, doseEvents: createdDoseEvents };
   }
 
+  public refillMedicationStock(medicationId: string, addedQuantity: number, actorName = 'Caregiver') {
+    const inv = this.medicationInventories.get(medicationId);
+    if (inv) {
+      inv.currentStock += addedQuantity;
+      inv.lastRefilledDate = new Date().toISOString().split('T')[0];
+      const med = this.medications.get(medicationId);
+      if (med) med.inventory = inv;
+      this.logAudit('caregiver', actorName, 'REFILL_MEDICATION', 'medication_inventory', inv.id, med?.elderlyProfileId);
+      this.broadcast('INVENTORY_UPDATED', inv);
+    }
+  }
+
   public updateMedicationSchedule(
     medicationId: string,
     newScheduleData: Omit<MedicationSchedule, 'id' | 'medicationId' | 'createdAt'>,
@@ -258,7 +334,6 @@ export class InMemoryPlatformDataStore {
     const oldSched = Array.from(this.medicationSchedules.values()).find((s) => s.medicationId === medicationId);
     const now = new Date().toISOString();
 
-    // Preserve schedule history
     if (oldSched) {
       this.medicationScheduleHistories.push({
         id: `hist-${Date.now()}`,
@@ -273,7 +348,6 @@ export class InMemoryPlatformDataStore {
       });
     }
 
-    // Save new schedule
     const newSchedId = `sched-${Date.now()}`;
     const newSchedule: MedicationSchedule = {
       id: newSchedId,
@@ -284,7 +358,6 @@ export class InMemoryPlatformDataStore {
     this.medicationSchedules.set(newSchedId, newSchedule);
     med.activeSchedule = newSchedule;
 
-    // Remove future un-taken dose events and regenerate
     const todayStr = new Date().toISOString().split('T')[0];
     for (const [key, event] of this.doseEvents.entries()) {
       if (event.medicationId === medicationId && event.scheduledDate >= todayStr && event.status === 'scheduled') {
@@ -334,6 +407,12 @@ export class InMemoryPlatformDataStore {
 
     if (['self_confirmed', 'caregiver_administered', 'proxy_confirmed'].includes(actionType)) {
       newStatus = 'taken';
+      // Decrement inventory stock on successful dose take
+      const inv = this.medicationInventories.get(event.medicationId);
+      if (inv && inv.currentStock > 0 && event.status !== 'taken') {
+        inv.currentStock -= 1;
+        if (event.medication) event.medication.inventory = inv;
+      }
     } else if (actionType === 'skipped') {
       newStatus = 'skipped';
     } else if (actionType === 'snoozed') {
@@ -413,6 +492,15 @@ export class InMemoryPlatformDataStore {
       }
     }
 
+    // Restore stock if undoing taken
+    if (event.status === 'taken') {
+      const inv = this.medicationInventories.get(event.medicationId);
+      if (inv) {
+        inv.currentStock += 1;
+        if (event.medication) event.medication.inventory = inv;
+      }
+    }
+
     const undoActionId = `action-undo-${Date.now()}`;
     const undoAction: DoseAction = {
       id: undoActionId,
@@ -441,7 +529,96 @@ export class InMemoryPlatformDataStore {
     return { doseEvent: event, undoAction };
   }
 
-  // --- Appointments ---
+  // --- Phase 2: Daily Health Check-ins ---
+  public recordDailyCheckin(
+    elderlyProfileId: string,
+    data: Omit<DailyHealthCheckin, 'id' | 'elderlyProfileId' | 'recordedAt'>
+  ): DailyHealthCheckin {
+    const checkinId = `checkin-${Date.now()}`;
+    const checkin: DailyHealthCheckin = {
+      id: checkinId,
+      elderlyProfileId,
+      ...data,
+      recordedAt: new Date().toISOString()
+    };
+    this.dailyHealthCheckins.set(checkin.date, checkin);
+    this.logAudit('elderly', 'Elderly Patient', 'RECORD_HEALTH_CHECKIN', 'daily_health_checkin', checkinId, elderlyProfileId);
+    this.broadcast('HEALTH_CHECKIN_RECORDED', checkin);
+    return checkin;
+  }
+
+  // --- Phase 3: Caregiver Shift Handoff ---
+  public createShiftHandoff(
+    elderlyProfileId: string,
+    outgoingCaregiverId: string,
+    outgoingCaregiverName: string,
+    incomingCaregiverName: string,
+    observationsSummary: string,
+    concernsOrAlerts: string,
+    nextShiftActions: string[]
+  ): ShiftHandoff {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayEvents = Array.from(this.doseEvents.values()).filter(
+      (e) => e.elderlyProfileId === elderlyProfileId && e.scheduledDate === todayStr
+    );
+
+    const takenCount = todayEvents.filter((e) => e.status === 'taken').length;
+    const pendingCount = todayEvents.filter((e) => e.status === 'scheduled' || e.status === 'due').length;
+    const missedCount = todayEvents.filter((e) => e.status === 'skipped').length;
+
+    // Check low refills
+    const lowRefills = Array.from(this.medications.values())
+      .filter((m) => m.elderlyProfileId === elderlyProfileId && m.inventory && m.inventory.currentStock <= m.inventory.lowStockThreshold)
+      .map((m) => `${m.name} (${m.inventory?.currentStock} remaining)`);
+
+    const handoffId = `handoff-${Date.now()}`;
+    const handoff: ShiftHandoff = {
+      id: handoffId,
+      elderlyProfileId,
+      outgoingCaregiverId,
+      outgoingCaregiverName,
+      incomingCaregiverName,
+      shiftStart: `${todayStr}T08:00:00Z`,
+      shiftEnd: `${todayStr}T18:00:00Z`,
+      dosesAdministeredCount: takenCount,
+      pendingDosesCount: pendingCount,
+      missedDosesCount: missedCount,
+      observationsSummary,
+      concernsOrAlerts,
+      refillsNeeded: lowRefills,
+      nextShiftActions,
+      isAcknowledged: false,
+      createdAt: new Date().toISOString()
+    };
+
+    this.shiftHandoffs.set(handoffId, handoff);
+    this.logAudit(outgoingCaregiverId, outgoingCaregiverName, 'CREATE_SHIFT_HANDOFF', 'shift_handoff', handoffId, elderlyProfileId);
+    this.broadcast('SHIFT_HANDOFF_CREATED', handoff);
+    return handoff;
+  }
+
+  public acknowledgeShiftHandoff(handoffId: string, acknowledgedByName: string): ShiftHandoff {
+    const handoff = this.shiftHandoffs.get(handoffId);
+    if (!handoff) throw new Error('Handoff not found');
+    handoff.isAcknowledged = true;
+    handoff.acknowledgedAt = new Date().toISOString();
+    handoff.incomingCaregiverName = acknowledgedByName;
+    this.logAudit('caregiver', acknowledgedByName, 'ACKNOWLEDGE_SHIFT_HANDOFF', 'shift_handoff', handoffId, handoff.elderlyProfileId);
+    this.broadcast('SHIFT_HANDOFF_ACKNOWLEDGED', handoff);
+    return handoff;
+  }
+
+  // --- Phase 5: Smart Pillbox Simulation ---
+  public simulatePillboxDispense(elderlyProfileId: string, compartmentNumber = 1) {
+    const pillbox = this.smartPillboxes.get(elderlyProfileId);
+    if (pillbox) {
+      pillbox.lastOpenedTime = new Date().toISOString();
+      pillbox.batteryPercentage = Math.max(10, pillbox.batteryPercentage - 1);
+      this.broadcast('PILLBOX_OPENED', { pillbox, compartmentNumber });
+    }
+  }
+
+  // --- Appointments & Care Notes ---
   public addAppointment(
     elderlyProfileId: string,
     data: Omit<Appointment, 'id' | 'elderlyProfileId' | 'createdAt' | 'updatedAt'>
@@ -461,7 +638,6 @@ export class InMemoryPlatformDataStore {
     return apt;
   }
 
-  // --- Care Notes ---
   public addCareNote(
     elderlyProfileId: string,
     data: Omit<CareNote, 'id' | 'elderlyProfileId' | 'createdAt'>
@@ -471,6 +647,7 @@ export class InMemoryPlatformDataStore {
       id: noteId,
       elderlyProfileId,
       ...data,
+      visibility: data.visibility || 'circle_all',
       createdAt: new Date().toISOString()
     };
     this.careNotes.set(noteId, note);
@@ -520,10 +697,10 @@ export class InMemoryPlatformDataStore {
       medicalConditions: ['Type 2 Diabetes', 'Hypertension'],
       careNotes: 'Mild tremor in right hand. Prefer large text buttons.',
       quietHoursStart: '22:00',
-      quietHoursEnd: '07:00'
+      quietHoursEnd: '07:00',
+      preferredLanguage: 'en'
     });
 
-    // Add caregiver and family to circle
     const ccmCaregiver: CareCircleMember = {
       id: `member-${caregiverUser.id}`,
       circleId: careCircle.id,
@@ -531,6 +708,13 @@ export class InMemoryPlatformDataStore {
       user: caregiverUser,
       role: 'caregiver',
       canEdit: true,
+      permissions: {
+        canEditMedications: true,
+        canAdministerDoses: true,
+        canEditAppointments: true,
+        canViewVitals: true,
+        canManageCircle: true
+      },
       status: 'active',
       joinedAt: new Date().toISOString()
     };
@@ -543,6 +727,13 @@ export class InMemoryPlatformDataStore {
       user: familyUser,
       role: 'family',
       canEdit: true,
+      permissions: {
+        canEditMedications: true,
+        canAdministerDoses: false,
+        canEditAppointments: true,
+        canViewVitals: true,
+        canManageCircle: false
+      },
       status: 'active',
       joinedAt: new Date().toISOString()
     };
@@ -562,10 +753,9 @@ export class InMemoryPlatformDataStore {
     };
     this.emergencyContacts.set(emg.id, emg);
 
-    // Add Initial Medications (from design brief)
-    // 1. Metformin 500mg Morning
+    // Initial Medications with inventory & education
     this.addMedication(
-      elderlyProfileId(elderlyProfile.id),
+      elderlyProfile.id,
       {
         name: 'Metformin',
         genericName: 'Metformin Hydrochloride',
@@ -584,10 +774,10 @@ export class InMemoryPlatformDataStore {
         startDate: new Date().toISOString().split('T')[0]
       },
       caregiverUser.id,
-      caregiverUser.fullName
+      caregiverUser.fullName,
+      14 // 14 tablets remaining
     );
 
-    // 2. Amlodipine 5mg Evening
     this.addMedication(
       elderlyProfile.id,
       {
@@ -608,35 +798,69 @@ export class InMemoryPlatformDataStore {
         startDate: new Date().toISOString().split('T')[0]
       },
       caregiverUser.id,
-      caregiverUser.fullName
+      caregiverUser.fullName,
+      4 // 4 tablets remaining -> triggers low stock alert!
     );
 
-    // 3. Appointment tomorrow with Dr. Mehta
+    // Doctor appointment
     const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
     tomorrow.setHours(10, 30, 0, 0);
 
     this.addAppointment(elderlyProfile.id, {
       doctorName: 'Dr. Mehta',
-      specialty: 'Heart Specialist / Cardiology',
+      specialty: 'Cardiologist',
       facilityName: 'City Care Hospital',
       locationAddress: 'Room 204, City Care Hospital, MG Road',
       appointmentTime: tomorrow.toISOString(),
       purpose: 'Routine heart check-up & BP review',
       transportNotes: 'Ramesh will pick up at 9:45 AM',
       preparationChecklist: [
-        'Bring medicine list',
+        'Bring printed medicine list',
         'Bring blood-pressure readings',
         'Do not eat after 9:00 PM if fasting instructed'
       ],
       status: 'scheduled',
       createdByUserId: caregiverUser.id
     });
+
+    // Seed Daily Health Checkin
+    this.recordDailyCheckin(elderlyProfile.id, {
+      date: new Date().toISOString().split('T')[0],
+      mood: 'good',
+      painLevel: 2,
+      energyLevel: 'normal',
+      sleepQuality: 'well_rested',
+      notes: 'Rested well overnight, slight knee stiffness'
+    });
+
+    // Seed Care Note with Vitals
+    this.addCareNote(elderlyProfile.id, {
+      authorUserId: caregiverUser.id,
+      authorName: caregiverUser.fullName,
+      category: 'vital_signs',
+      content: 'Morning blood pressure checked: 130/84 mmHg, Heart rate: 74 bpm, Blood Sugar fasting: 112 mg/dL',
+      visibility: 'circle_all',
+      vitalSigns: {
+        bloodPressureSystolic: 130,
+        bloodPressureDiastolic: 84,
+        heartRate: 74,
+        bloodSugar: 112,
+        temperature: 98.4,
+        spO2: 98
+      }
+    });
+
+    // Seed Shift Handoff
+    this.createShiftHandoff(
+      elderlyProfile.id,
+      caregiverUser.id,
+      caregiverUser.fullName,
+      'Priya (Night Nurse)',
+      'Margaret had a peaceful day. Breakfast and lunch taken on time. Afternoon walk 20 minutes.',
+      'Amlodipine supply is low (4 tablets left). Refill request dispatched to Apollo Pharmacy.',
+      ['Check evening blood pressure at 7:30 PM', 'Give Amlodipine 5mg after dinner', 'Ensure glass of water at bedside']
+    );
   }
 }
 
-function elderlyProfileId(id: string): string {
-  return id;
-}
-
-// Global singleton instance for local runtime and tests
 export const platformDataStore = new InMemoryPlatformDataStore();

@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server';
-import { platformDataStore } from '@elderly-care/shared';
+import {
+  platformDataStore,
+  checkMedicationRisks,
+  calculateAdherenceStats
+} from '@elderly-care/shared';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const profileId = searchParams.get('profileId') || 'elderly-default';
+  const profileId = searchParams.get('profileId') || '';
 
-  // Get active elderly profile or first
   const profiles = Array.from(platformDataStore.elderlyProfiles.values());
   const currentProfile = profiles.find((p) => p.id === profileId) || profiles[0];
 
@@ -53,6 +56,20 @@ export async function GET(request: Request) {
 
   const notifications = platformDataStore.notifications;
 
+  // Full Phased Entities
+  const checkins = Array.from(platformDataStore.dailyHealthCheckins.values()).filter(
+    (c) => c.elderlyProfileId === currentProfile.id
+  );
+
+  const shiftHandoffs = Array.from(platformDataStore.shiftHandoffs.values()).filter(
+    (s) => s.elderlyProfileId === currentProfile.id
+  );
+
+  const riskFlags = checkMedicationRisks(currentProfile.id, medications);
+  const adherenceStats = calculateAdherenceStats(todayEvents);
+  const abdmProfile = platformDataStore.abdmProfiles.get(currentProfile.id) || null;
+  const smartPillbox = platformDataStore.smartPillboxes.get(currentProfile.id) || null;
+
   return NextResponse.json({
     profile: currentProfile,
     allProfiles: profiles,
@@ -65,7 +82,13 @@ export async function GET(request: Request) {
     circleMembers,
     invitations,
     auditEvents: auditEvents.slice(-20).reverse(),
-    notifications
+    notifications,
+    checkins,
+    shiftHandoffs,
+    riskFlags,
+    adherenceStats,
+    abdmProfile,
+    smartPillbox
   });
 }
 
@@ -106,6 +129,12 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: true, ...result });
       }
 
+      case 'REFILL_STOCK': {
+        const { medicationId, addedQuantity, actorName } = payload;
+        platformDataStore.refillMedicationStock(medicationId, addedQuantity, actorName);
+        return NextResponse.json({ success: true });
+      }
+
       case 'UPDATE_SCHEDULE': {
         const { medicationId, newSchedule, actorId, actorName, reason } = payload;
         const result = platformDataStore.updateMedicationSchedule(
@@ -116,6 +145,52 @@ export async function POST(request: Request) {
           reason
         );
         return NextResponse.json({ success: true, schedule: result });
+      }
+
+      case 'RECORD_HEALTH_CHECKIN': {
+        const { elderlyProfileId, checkin } = payload;
+        const result = platformDataStore.recordDailyCheckin(elderlyProfileId, checkin);
+        return NextResponse.json({ success: true, checkin: result });
+      }
+
+      case 'CREATE_SHIFT_HANDOFF': {
+        const {
+          elderlyProfileId,
+          outgoingCaregiverId,
+          outgoingCaregiverName,
+          incomingCaregiverName,
+          observationsSummary,
+          concernsOrAlerts,
+          nextShiftActions
+        } = payload;
+        const result = platformDataStore.createShiftHandoff(
+          elderlyProfileId,
+          outgoingCaregiverId,
+          outgoingCaregiverName,
+          incomingCaregiverName,
+          observationsSummary,
+          concernsOrAlerts,
+          nextShiftActions
+        );
+        return NextResponse.json({ success: true, handoff: result });
+      }
+
+      case 'ACKNOWLEDGE_SHIFT_HANDOFF': {
+        const { handoffId, acknowledgedByName } = payload;
+        const result = platformDataStore.acknowledgeShiftHandoff(handoffId, acknowledgedByName);
+        return NextResponse.json({ success: true, handoff: result });
+      }
+
+      case 'SIMULATE_PILLBOX_OPEN': {
+        const { elderlyProfileId, compartmentNumber } = payload;
+        platformDataStore.simulatePillboxDispense(elderlyProfileId, compartmentNumber);
+        return NextResponse.json({ success: true });
+      }
+
+      case 'CHANGE_LANGUAGE': {
+        const { profileId, language } = payload;
+        platformDataStore.setPreferredLanguage(profileId, language);
+        return NextResponse.json({ success: true });
       }
 
       case 'ADD_APPOINTMENT': {

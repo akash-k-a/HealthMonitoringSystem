@@ -1,16 +1,40 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Check, Undo2, AlertCircle, Calendar, Phone, Heart, Clock, ShieldAlert } from 'lucide-react';
-import type { DoseEvent, ElderlyProfile, Appointment, EmergencyContact } from '@elderly-care/types';
+import {
+  Check,
+  Undo2,
+  AlertCircle,
+  Calendar,
+  Phone,
+  Heart,
+  Clock,
+  ShieldAlert,
+  Mic,
+  Info,
+  HelpCircle,
+  Smile,
+  Volume2
+} from 'lucide-react';
+import type {
+  DoseEvent,
+  ElderlyProfile,
+  Appointment,
+  EmergencyContact,
+  DailyHealthCheckin,
+  SupportedLanguage
+} from '@elderly-care/types';
+import { getTranslation } from '@elderly-care/shared';
 
 interface ElderlyTodayViewProps {
   profile: ElderlyProfile;
   events: DoseEvent[];
   appointments: Appointment[];
   emergencyContacts: EmergencyContact[];
+  todayCheckin?: DailyHealthCheckin;
   onRecordDose: (doseEventId: string, actionType: string, notes?: string) => Promise<void>;
   onUndoDose: (doseEventId: string, reason?: string) => Promise<void>;
+  onRecordCheckin: (checkin: any) => Promise<void>;
 }
 
 export function ElderlyTodayView({
@@ -18,9 +42,13 @@ export function ElderlyTodayView({
   events,
   appointments,
   emergencyContacts,
+  todayCheckin,
   onRecordDose,
-  onUndoDose
+  onUndoDose,
+  onRecordCheckin
 }: ElderlyTodayViewProps) {
+  const lang: SupportedLanguage = profile.preferredLanguage || 'en';
+
   const [activeTab, setActiveTab] = useState<'today' | 'medicines' | 'emergency'>('today');
   const [undoSecondsRemaining, setUndoSecondsRemaining] = useState<number>(0);
   const [recentlyTakenEventId, setRecentlyTakenEventId] = useState<string | null>(null);
@@ -28,8 +56,10 @@ export function ElderlyTodayView({
   const [selectedSkipEventId, setSelectedSkipEventId] = useState<string | null>(null);
   const [helpRequested, setHelpRequested] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [showEducationModal, setShowEducationModal] = useState<boolean>(false);
+  const [isListeningVoice, setIsListeningVoice] = useState<boolean>(false);
+  const [voiceSpokenText, setVoiceSpokenText] = useState<string>('');
 
-  // Undo countdown timer
   useEffect(() => {
     if (undoSecondsRemaining <= 0) {
       if (undoSecondsRemaining === 0 && recentlyTakenEventId) {
@@ -43,12 +73,10 @@ export function ElderlyTodayView({
     return () => clearInterval(timer);
   }, [undoSecondsRemaining, recentlyTakenEventId]);
 
-  // Sort events by scheduled time
   const sortedEvents = [...events].sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime));
-  
-  // Primary active dose: first scheduled or unconfirmed dose
-  const activeDose = sortedEvents.find((e) => e.status === 'scheduled' || e.status === 'due' || e.status === 'unconfirmed') 
-    || sortedEvents[0];
+  const activeDose =
+    sortedEvents.find((e) => e.status === 'scheduled' || e.status === 'due' || e.status === 'unconfirmed') ||
+    sortedEvents[0];
   const nextDose = sortedEvents.find((e) => e.id !== activeDose?.id && (e.status === 'scheduled' || e.status === 'due'));
   const nextAppointment = appointments[0];
 
@@ -87,25 +115,63 @@ export function ElderlyTodayView({
     }
   };
 
-  const todayFormatted = new Intl.DateTimeFormat('en-US', {
+  const handleVoiceSimulate = () => {
+    setIsListeningVoice(true);
+    setVoiceSpokenText('Listening...');
+    setTimeout(() => {
+      setVoiceSpokenText('"I took my morning Metformin"');
+      setTimeout(() => {
+        setIsListeningVoice(false);
+        if (activeDose && activeDose.status !== 'taken') {
+          handleTakeDose(activeDose.id);
+        }
+      }, 1500);
+    }, 1500);
+  };
+
+  const handleMoodSelect = async (mood: 'great' | 'good' | 'okay' | 'low' | 'unwell') => {
+    await onRecordCheckin({
+      date: new Date().toISOString().split('T')[0],
+      mood,
+      painLevel: mood === 'great' ? 0 : mood === 'good' ? 2 : mood === 'okay' ? 4 : 6,
+      energyLevel: mood === 'great' || mood === 'good' ? 'high' : 'normal',
+      sleepQuality: 'well_rested'
+    });
+  };
+
+  const todayFormatted = new Intl.DateTimeFormat(lang === 'ml' ? 'ml-IN' : 'en-US', {
     weekday: 'long',
     day: 'numeric',
     month: 'long'
   }).format(new Date());
 
   return (
-    <div className="max-w-md mx-auto bg-white min-h-[750px] shadow-2xl rounded-3xl border-4 border-slate-200 flex flex-col justify-between overflow-hidden">
+    <div className="max-w-md mx-auto bg-white min-h-[760px] shadow-2xl rounded-3xl border-4 border-slate-200 flex flex-col justify-between overflow-hidden">
       {/* Top Banner */}
       <div className="p-6 bg-emerald-700 text-white">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Good morning, {profile.preferredName || profile.fullName}</h1>
+            <h1 className="text-2xl font-bold tracking-tight">
+              {getTranslation(lang, 'goodMorning')}, {profile.preferredName || profile.fullName}
+            </h1>
             <p className="text-emerald-100 text-base mt-1 font-medium">{todayFormatted}</p>
           </div>
-          <div className="w-12 h-12 rounded-full bg-emerald-600 flex items-center justify-center border-2 border-emerald-400">
-            <Heart className="w-7 h-7 text-white fill-white" />
-          </div>
+          <button
+            onClick={handleVoiceSimulate}
+            title="Voice Assistance"
+            className="w-12 h-12 rounded-full bg-emerald-600 hover:bg-emerald-500 flex items-center justify-center border-2 border-emerald-400 active:scale-95 shadow-md"
+          >
+            <Mic className={`w-6 h-6 text-white ${isListeningVoice ? 'animate-pulse text-rose-300' : ''}`} />
+          </button>
         </div>
+
+        {/* Voice Feedback Strip */}
+        {voiceSpokenText && (
+          <div className="mt-3 p-2.5 bg-emerald-800/90 rounded-xl text-xs font-bold text-emerald-200 flex items-center gap-2">
+            <Volume2 className="w-4 h-4 text-emerald-300 shrink-0" />
+            <span>{voiceSpokenText}</span>
+          </div>
+        )}
       </div>
 
       {/* Main Body */}
@@ -119,9 +185,12 @@ export function ElderlyTodayView({
                   <Check className="w-10 h-10 stroke-[3]" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-black text-emerald-950">Great! Medicine Taken</h2>
+                  <h2 className="text-2xl font-black text-emerald-950">
+                    {getTranslation(lang, 'greatMedicineTaken')}
+                  </h2>
                   <p className="text-lg text-emerald-800 font-semibold mt-1">
-                    Marked as taken at {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {getTranslation(lang, 'markedAsTakenAt')}{' '}
+                    {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
                 <button
@@ -130,15 +199,29 @@ export function ElderlyTodayView({
                   className="w-full min-h-[58px] bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-slate-950 text-xl font-bold rounded-2xl flex items-center justify-center gap-3 shadow-lg border-2 border-amber-600 transition-transform active:scale-95"
                 >
                   <Undo2 className="w-7 h-7 stroke-[2.5]" />
-                  <span>Undo ({undoSecondsRemaining}s left)</span>
+                  <span>
+                    {getTranslation(lang, 'undo')} ({undoSecondsRemaining}{getTranslation(lang, 'secondsLeft')})
+                  </span>
                 </button>
               </div>
             ) : activeDose ? (
               /* The Primary "Today" Dose Card */
               <div className="bg-amber-50 border-4 border-amber-300 rounded-3xl p-6 shadow-md space-y-4">
-                <div className="flex items-center gap-2 text-amber-900 font-bold text-lg tracking-wide uppercase">
-                  <span className="text-2xl">☀️</span>
-                  <span>{activeDose.routineCategory} DOSE</span>
+                <div className="flex items-center justify-between text-amber-900 font-bold text-lg tracking-wide uppercase">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl">☀️</span>
+                    <span>
+                      {activeDose.routineCategory} {getTranslation(lang, 'todayDose')}
+                    </span>
+                  </div>
+                  {/* Why am I taking this? button */}
+                  <button
+                    onClick={() => setShowEducationModal(true)}
+                    className="text-xs normal-case bg-amber-200/80 hover:bg-amber-300 text-amber-950 px-2.5 py-1 rounded-xl flex items-center gap-1 font-bold"
+                  >
+                    <HelpCircle className="w-4 h-4 text-amber-800" />
+                    <span>{getTranslation(lang, 'whyAmITakingThis')}</span>
+                  </button>
                 </div>
 
                 <div className="space-y-1">
@@ -168,7 +251,11 @@ export function ElderlyTodayView({
                   }`}
                 >
                   <Check className="w-9 h-9 stroke-[3]" />
-                  <span>{activeDose.status === 'taken' ? 'ALREADY TAKEN' : 'I TOOK IT'}</span>
+                  <span>
+                    {activeDose.status === 'taken'
+                      ? getTranslation(lang, 'alreadyTaken')
+                      : getTranslation(lang, 'iTookIt')}
+                  </span>
                 </button>
 
                 {/* Secondary Actions */}
@@ -178,7 +265,7 @@ export function ElderlyTodayView({
                     className="min-h-[50px] bg-white hover:bg-slate-100 active:bg-slate-200 border-2 border-slate-300 text-slate-800 font-bold text-lg rounded-xl flex items-center justify-center gap-2"
                   >
                     <AlertCircle className="w-5 h-5 text-amber-600" />
-                    <span>Need help</span>
+                    <span>{getTranslation(lang, 'needHelp')}</span>
                   </button>
 
                   <button
@@ -188,7 +275,7 @@ export function ElderlyTodayView({
                     }}
                     className="min-h-[50px] bg-white hover:bg-slate-100 active:bg-slate-200 border-2 border-slate-300 text-slate-800 font-bold text-lg rounded-xl flex items-center justify-center gap-2"
                   >
-                    <span>Not today</span>
+                    <span>{getTranslation(lang, 'notToday')}</span>
                   </button>
                 </div>
               </div>
@@ -200,7 +287,44 @@ export function ElderlyTodayView({
               </div>
             )}
 
-            {/* Help Requested Confirmation */}
+            {/* Daily Health & Mood Check-in Card (Phase 2) */}
+            <div className="bg-slate-50 border-2 border-slate-200 rounded-3xl p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase text-slate-500 tracking-wider">
+                  {getTranslation(lang, 'dailyCheckin')}
+                </span>
+                {todayCheckin && (
+                  <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                    ✓ Recorded
+                  </span>
+                )}
+              </div>
+              <p className="text-base font-bold text-slate-900">{getTranslation(lang, 'howAreYouFeelingToday')}</p>
+              <div className="flex justify-between gap-1 pt-1">
+                {[
+                  { label: getTranslation(lang, 'great'), mood: 'great', emoji: '😄' },
+                  { label: getTranslation(lang, 'good'), mood: 'good', emoji: '🙂' },
+                  { label: getTranslation(lang, 'okay'), mood: 'okay', emoji: '😐' },
+                  { label: getTranslation(lang, 'low'), mood: 'low', emoji: '😔' },
+                  { label: getTranslation(lang, 'unwell'), mood: 'unwell', emoji: '🤒' }
+                ].map((m) => (
+                  <button
+                    key={m.mood}
+                    onClick={() => handleMoodSelect(m.mood as any)}
+                    className={`flex-1 py-2 rounded-xl text-center border text-xs font-bold transition-all ${
+                      todayCheckin?.mood === m.mood
+                        ? 'bg-emerald-600 text-white border-emerald-700 shadow-md scale-105'
+                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    <span className="text-xl block">{m.emoji}</span>
+                    <span className="text-[10px] mt-0.5 block truncate">{m.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Help Requested Banner */}
             {helpRequested && (
               <div className="p-4 bg-blue-50 border-2 border-blue-400 rounded-2xl text-blue-950 flex items-center justify-between">
                 <div>
@@ -220,7 +344,9 @@ export function ElderlyTodayView({
             {nextDose && (
               <div className="bg-slate-100 rounded-2xl p-4 border border-slate-300 flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-bold text-slate-500 uppercase tracking-wider">UP NEXT</p>
+                  <p className="text-sm font-bold text-slate-500 uppercase tracking-wider">
+                    {getTranslation(lang, 'upNext')}
+                  </p>
                   <p className="text-lg font-bold text-slate-900">
                     {nextDose.medication?.name} at {nextDose.scheduledTime.substring(0, 5)}
                   </p>
@@ -234,21 +360,20 @@ export function ElderlyTodayView({
               <div className="bg-sky-50 border-2 border-sky-300 rounded-3xl p-5 space-y-2">
                 <div className="flex items-center gap-2 text-sky-900 font-bold text-base">
                   <Calendar className="w-6 h-6 text-sky-700" />
-                  <span>DOCTOR VISIT</span>
+                  <span>{getTranslation(lang, 'doctorVisit')}</span>
                 </div>
                 <h3 className="text-xl font-black text-sky-950">
-                  {new Date(nextAppointment.appointmentTime).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
+                  {new Date(nextAppointment.appointmentTime).toLocaleDateString([], {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric'
+                  })}{' '}
                   • {new Date(nextAppointment.appointmentTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </h3>
                 <p className="text-lg font-bold text-slate-800">
                   {nextAppointment.doctorName} • {nextAppointment.specialty || 'Check-up'}
                 </p>
                 <p className="text-base text-slate-600">{nextAppointment.facilityName}</p>
-                {nextAppointment.transportNotes && (
-                  <p className="text-sm font-semibold text-emerald-800 bg-emerald-100/70 p-2 rounded-xl">
-                    🚗 {nextAppointment.transportNotes}
-                  </p>
-                )}
               </div>
             )}
           </>
@@ -257,15 +382,13 @@ export function ElderlyTodayView({
         {/* Medicines Routine Tab */}
         {activeTab === 'medicines' && (
           <div className="space-y-4">
-            <h2 className="text-2xl font-black text-slate-900">My Medicine Routine</h2>
+            <h2 className="text-2xl font-black text-slate-900">{getTranslation(lang, 'myMedicines')}</h2>
             <div className="space-y-3">
               {events.map((ev) => (
                 <div
                   key={ev.id}
                   className={`p-4 rounded-2xl border-2 ${
-                    ev.status === 'taken'
-                      ? 'bg-emerald-50 border-emerald-400'
-                      : 'bg-white border-slate-300'
+                    ev.status === 'taken' ? 'bg-emerald-50 border-emerald-400' : 'bg-white border-slate-300'
                   }`}
                 >
                   <div className="flex items-start justify-between">
@@ -302,8 +425,8 @@ export function ElderlyTodayView({
           <div className="space-y-4">
             <div className="bg-red-50 border-4 border-red-500 rounded-2xl p-4 text-center">
               <ShieldAlert className="w-12 h-12 text-red-600 mx-auto" />
-              <h2 className="text-2xl font-black text-red-950 mt-1">EMERGENCY HELP</h2>
-              <p className="text-base font-semibold text-red-800">Tap below to call your primary contact</p>
+              <h2 className="text-2xl font-black text-red-950 mt-1">{getTranslation(lang, 'emergencyHelp')}</h2>
+              <p className="text-base font-semibold text-red-800">{getTranslation(lang, 'tapToCall')}</p>
             </div>
 
             <div className="space-y-3">
@@ -328,19 +451,66 @@ export function ElderlyTodayView({
             </div>
 
             <div className="bg-slate-100 p-4 rounded-2xl border border-slate-300 space-y-2">
-              <h4 className="text-base font-bold text-slate-900">Important Medical Info:</h4>
-              <p className="text-sm font-semibold text-slate-700">
-                • Allergies: <span className="text-red-700">{profile.allergies.join(', ') || 'None reported'}</span>
-              </p>
-              <p className="text-sm font-semibold text-slate-700">
-                • Conditions: {profile.medicalConditions.join(', ') || 'None'}
+              <h4 className="text-base font-bold text-slate-900">{getTranslation(lang, 'allergies')}:</h4>
+              <p className="text-sm font-semibold text-red-700">
+                {profile.allergies.join(', ') || 'None reported'}
               </p>
             </div>
           </div>
         )}
       </div>
 
-      {/* "Not Today" Follow-Up Reason Modal */}
+      {/* Modal: "Why am I taking this?" Expandable Card */}
+      {showEducationModal && activeDose && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl border-4 border-amber-300">
+            <div className="flex items-center gap-2 text-amber-900">
+              <Info className="w-6 h-6" />
+              <h3 className="text-xl font-black text-slate-950">About {activeDose.medication?.name}</h3>
+            </div>
+            <div className="space-y-3 text-sm text-slate-700">
+              <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200">
+                <h4 className="font-bold text-amber-900">Plain-language Purpose:</h4>
+                <p className="text-xs text-slate-800 mt-1">
+                  {activeDose.medication?.education?.purposePlainLanguage || activeDose.medication?.purpose}
+                </p>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200">
+                <h4 className="font-bold text-slate-900">How to take:</h4>
+                <p className="text-xs text-slate-700 mt-1">
+                  {activeDose.medication?.education?.foodAndDrinkAdvice || 'Take with water as instructed.'}
+                </p>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200">
+                <h4 className="font-bold text-slate-900">Common side effects:</h4>
+                <p className="text-xs text-slate-700 mt-1">
+                  {activeDose.medication?.education?.commonSideEffects?.join(', ') || 'None reported.'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                alert(`Direct dial to pharmacist (+91 80 2345 6789) or Dr. Mehta`);
+                setShowEducationModal(false);
+              }}
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm"
+            >
+              {getTranslation(lang, 'askDoctorOrPharmacist')}
+            </button>
+            <button
+              onClick={() => setShowEducationModal(false)}
+              className="w-full py-2 bg-slate-100 text-slate-600 font-bold rounded-xl text-xs"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* "Not Today" Reason Modal */}
       {showSkipModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl border-4 border-slate-300">
@@ -371,7 +541,7 @@ export function ElderlyTodayView({
         </div>
       )}
 
-      {/* Bottom Navigation (≥48px touch targets, high contrast) */}
+      {/* Bottom Navigation */}
       <div className="grid grid-cols-3 bg-slate-100 border-t-2 border-slate-300 p-2">
         <button
           onClick={() => setActiveTab('today')}

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { CheckCircle, Calendar, MessageSquare, Heart, ShieldCheck, Phone } from 'lucide-react';
+import { CheckCircle, Calendar, MessageSquare, Heart, ShieldCheck, Phone, Bell, Clock } from 'lucide-react';
 import type { DoseEvent, ElderlyProfile, Appointment, CareNote, EmergencyContact } from '@elderly-care/types';
 
 interface FamilyReassuranceViewProps {
@@ -20,6 +20,9 @@ export function FamilyReassuranceView({
   emergencyContacts
 }: FamilyReassuranceViewProps) {
   const [encouragementSent, setEncouragementSent] = useState(false);
+  const [digestTime, setDigestTime] = useState('19:00');
+  const [showSettings, setShowSettings] = useState(false);
+
   const totalDoses = events.length;
   const takenDoses = events.filter((e) => e.status === 'taken').length;
   const nextAppointment = appointments[0];
@@ -44,7 +47,13 @@ export function FamilyReassuranceView({
             <span className="text-emerald-200 text-xs font-bold uppercase tracking-wider">Peace of Mind Digest</span>
             <h1 className="text-3xl font-black">{profile.preferredName || profile.fullName}'s Day — {todayDate}</h1>
           </div>
-          <ShieldCheck className="w-12 h-12 text-emerald-300" />
+          <button
+            onClick={() => setShowSettings(!showSettings)}
+            title="Digest Preferences"
+            className="w-10 h-10 rounded-full bg-emerald-700 hover:bg-emerald-600 flex items-center justify-center border border-emerald-500"
+          >
+            <Bell className="w-5 h-5 text-emerald-200" />
+          </button>
         </div>
 
         <div className="grid grid-cols-2 gap-3 pt-2">
@@ -60,6 +69,32 @@ export function FamilyReassuranceView({
           </div>
         </div>
       </div>
+
+      {/* Digest Settings Drawer */}
+      {showSettings && (
+        <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-2 text-xs">
+          <h4 className="font-bold text-slate-900 flex items-center gap-1.5">
+            <Clock className="w-4 h-4 text-emerald-600" />
+            <span>Family Daily Digest Notification Settings</span>
+          </h4>
+          <p className="text-slate-600">
+            Choose when you receive your peace-of-mind summary. Routine pills will not ping you during work hours.
+          </p>
+          <div className="flex items-center gap-2 pt-1">
+            <span className="font-semibold text-slate-700">Preferred Digest Time:</span>
+            <select
+              value={digestTime}
+              onChange={(e) => setDigestTime(e.target.value)}
+              className="p-1.5 border border-slate-300 rounded-lg text-xs font-bold"
+            >
+              <option value="08:00">08:00 AM (Morning update)</option>
+              <option value="13:00">01:00 PM (Afternoon check)</option>
+              <option value="19:00">07:00 PM (Evening recap)</option>
+              <option value="21:00">09:00 PM (Bedtime summary)</option>
+            </select>
+          </div>
+        </div>
+      )}
 
       {/* Encouragement Alert */}
       {encouragementSent && (
@@ -80,13 +115,19 @@ export function FamilyReassuranceView({
             {nextAppointment.doctorName} • {nextAppointment.specialty}
           </h3>
           <p className="text-sm font-semibold text-slate-600">
-            {new Date(nextAppointment.appointmentTime).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}{' '}
+            {new Date(nextAppointment.appointmentTime).toLocaleDateString([], {
+              weekday: 'short',
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })}{' '}
             at {nextAppointment.facilityName}
           </p>
         </div>
       )}
 
-      {/* Recent Meaningful Updates (Not routine chatter) */}
+      {/* Recent Meaningful Updates */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
         <h3 className="text-lg font-black text-slate-900">Recent Meaningful Updates</h3>
         <div className="space-y-3">
