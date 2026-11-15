@@ -1,0 +1,237 @@
+UI Design goal
+
+Design the elderly interface as a “Today” companion, not a medical dashboard: one screen shows what to do now, with one obvious action and minimal navigation. Family and caretaker views can be denser, but the elderly person’s experience must prioritize legibility, certainty, and autonomy. Accessibility guidance supports scalable text, strong contrast, and sufficiently large touch targets.
+
+Design principles
+One task at a time: Show the next dose or appointment prominently; avoid presenting a full medication list on the home screen.
+
+Large, forgiving controls: Use full-width primary buttons and at least 44 × 44 CSS-pixel touch targets to reduce accidental taps.
+
+Plain language: Say “Take 1 blood-pressure tablet with breakfast,” not “Administer 10 mg antihypertensive at 08:00.”
+
+Redundant cues: Pair color with icons and text, since color alone is not reliable for users with low vision or color-vision differences.
+
+Reversible actions: Allow “Undo” after marking a dose taken, and require confirmation only for consequential actions such as deleting a medication.
+
+Support larger text: Let users increase text/icon size up to 200%; Apple recommends supporting text enlargement and Dynamic Type.
+
+Use high contrast: Maintain at least 4.5:1 contrast for normal text and 3:1 for large text, consistent with WCAG guidance.
+
+Elderly home screen
+The elderly user opens the app directly into Today, with no login complexity after the initial passcode/biometric setup.
+
+text
+┌──────────────────────────────────────────┐
+│  Good morning, Mrs. Sharma               │
+│  Sunday, 15 November                     │
+│                                          │
+│  ┌────────────────────────────────────┐  │
+│  │  ☀️  MORNING                        │  │
+│  │                                    │  │
+│  │  Take 1 Metformin tablet           │  │
+│  │  With breakfast                    │  │
+│  │                                    │  │
+│  │  ┌──────────────────────────────┐  │  │
+│  │  │        I TOOK IT             │  │  │
+│  │  └──────────────────────────────┘  │  │
+│  │                                    │  │
+│  │  [ Need help ]   [ Not today ]     │  │
+│  └────────────────────────────────────┘  │
+│                                          │
+│  Next: Blood-pressure tablet at 8 PM     │
+│                                          │
+│  ┌────────────────────────────────────┐  │
+│  │ 📅 Doctor visit tomorrow, 10:30 AM │  │
+│  │ Dr. Mehta • Heart check-up         │  │
+│  │ [ View details ]                   │  │
+│  └────────────────────────────────────┘  │
+│                                          │
+│  [ My medicines ]  [ Help ]  [ Family ]  │
+└──────────────────────────────────────────┘
+Why this works
+The current dose occupies the center of the screen, with a single large action: I TOOK IT.
+
+“Need help” immediately notifies the selected caregiver without requiring the elderly person to navigate menus.
+
+“Not today” records a skipped dose but asks a simple follow-up: “Feeling unwell,” “Doctor told me to skip,” or “I forgot.”
+
+The next event is visible but visually secondary, preventing cognitive overload.
+
+Navigation uses three familiar labels rather than icons alone.
+
+Dose confirmation flow
+Use a two-step confirmation to prevent accidental taps, but keep it fast:
+
+Tap I TOOK IT.
+
+See a large confirmation: “Great! Metformin marked as taken at 8:12 AM.”
+
+Offer Undo for 30 seconds.
+
+For high-risk medicines, add one simple safety question only when relevant:
+
+text
+Did you take it with food as instructed?
+
+[ Yes ]        [ I’m not sure ]
+If the user selects “I’m not sure,” the app offers a one-tap call or message to the caregiver/pharmacist. It should never diagnose or instruct a dosage change.
+
+Medication list
+The elderly view should be a visual routine, not a clinical table.
+
+text
+MY MEDICINES
+
+Morning — with breakfast
+┌────────────────────────────────────────────┐
+│ 💊 Metformin 500 mg                         │
+│ 1 tablet • For sugar control                │
+│ Status: Taken at 8:12 AM                    │
+└────────────────────────────────────────────┘
+
+Evening — after dinner
+┌────────────────────────────────────────────┐
+│ 💊 Amlodipine 5 mg                          │
+│ 1 tablet • For blood pressure               │
+│ Status: Due at 8:00 PM                      │
+└────────────────────────────────────────────┘
+
+Supplements
+┌────────────────────────────────────────────┐
+│ 🌿 Vitamin D                                │
+│ 1 tablet • Once daily                       │
+└────────────────────────────────────────────┘
+Include a “Why am I taking this?” expandable card with plain-language purpose, common side effects, and a “Ask my doctor or pharmacist” action. The NIA recommends maintaining a complete list of prescriptions, OTC drugs, vitamins, and supplements.
+
+Appointment screen
+text
+DOCTOR VISIT
+
+Tomorrow • 10:30 AM
+Dr. Mehta — Heart specialist
+
+📍 City Care Hospital, Room 204
+🚗 Ramesh will pick you up at 9:45 AM
+
+BEFORE THE VISIT
+☐ Bring medicine list
+☐ Bring blood-pressure readings
+☐ Do not eat after 9:00 PM, if instructed
+
+[ Add to calendar ]
+[ Send details to family ]
+[ Need a reminder ]
+The appointment detail should automatically generate a medication list PDF for the visit, reflecting the NIA recommendation to bring names, doses, and schedules to appointments.
+
+Caregiver interface
+Caregivers need operational clarity, but should not receive every routine notification.
+
+text
+CARE DASHBOARD — Mrs. Sharma
+
+Today: 6 of 8 doses taken
+Missed: Cholesterol tablet, 9:00 AM
+Next high-priority dose: Blood thinner, 8:00 PM
+
+┌──────────────────────┬──────────────────────┐
+│ TODAY’S SCHEDULE      │ ALERTS               │
+│ ✔ Metformin           │ ⚠ Missed dose        │
+│ ✔ Vitamin D           │ ⚠ Refill in 3 days   │
+│ ⏳ Blood pressure      │ ⚠ Dizziness noted    │
+│ ⏳ Cholesterol        │                      │
+└──────────────────────┴──────────────────────┘
+
+[ Mark dose given ] [ Add note ] [ Call ]
+[ Start shift handoff ]
+Caregiver actions
+Mark dose given: Requires selecting who administered it and the time; this creates an audit trail.
+
+Add note: Uses structured chips—“Dizziness,” “Refused meal,” “Fell,” “Mood low,” “Vitals recorded”—plus optional free text.
+
+Shift handoff: Creates a summary for the next caretaker: completed doses, pending doses, concerns, refills, and appointments.
+
+Escalate: Sends a defined alert to the primary family contact for missed critical medication, repeated skips, or an urgent note.
+
+Family interface
+Family members should receive reassurance without becoming overwhelmed.
+
+text
+MOM’S DAY — 15 November
+
+✅ 7 of 8 medicines taken
+📅 Cardiology appointment tomorrow at 10:30 AM
+🟢 No urgent alerts
+
+Recent updates
+• 8:12 AM — Morning medicines taken
+• 7:45 AM — Caretaker note: “Ate breakfast well”
+• Yesterday — Blood pressure recorded: 138/86
+
+[ View full history ]
+[ Send encouragement ]
+[ Contact caretaker ]
+Avoid a continuous live feed by default. Offer a daily digest at a chosen time and immediate alerts only for missed high-risk doses, emergencies, or major appointment changes.
+
+Visual system
+Element	Recommended approach
+Typography	Large system font, minimum 18–20 pt body text, bold headings, support resizing to 200% 
+Color	Calm neutral background; green for completed, amber for pending/attention, red reserved for urgent safety issues
+Buttons	Full-width primary buttons, minimum 56–64 px height on mobile; 44 × 44 CSS-pixel minimum touch area 
+Icons	Simple, universally recognizable icons with text labels
+Navigation	Maximum 3–4 bottom tabs: Today, Medicines, Appointments, Help
+Feedback	Large success messages, vibration, optional sound, and clear undo
+Errors	Plain-language recovery: “We couldn’t save this. Try again or ask for help.”
+Voice	Large microphone button for adding notes, confirming doses, or asking for help
+Accessibility requirements
+Support screen readers with meaningful labels such as “Mark Metformin morning dose as taken,” rather than “Button.”
+
+Ensure all actions can be completed with single taps; avoid swipe-only or multi-finger gestures. WCAG requires path-based or multipoint gestures to have a single-pointer alternative where possible.
+
+Provide dark mode, high-contrast mode, reduced-motion setting, and adjustable text size.
+
+Keep critical information available offline, especially today’s medication schedule and emergency contacts.
+
+Test with older adults who have presbyopia, tremor, arthritis, mild cognitive impairment, and limited smartphone experience.
+
+Onboarding flow
+Keep onboarding caregiver-assisted but elderly-controlled:
+
+Welcome: “This app helps you remember your medicines and appointments.”
+
+Create passcode: Four-digit PIN, with optional fingerprint/Face ID.
+
+Add trusted people: The elderly person approves each family member or caretaker.
+
+Choose reminders: “Would you like a reminder 15 minutes before each medicine?”
+
+Set emergency contact: One primary person to contact for help.
+
+Practice: A guided demo asks the user to mark a sample dose as taken.
+
+Finish: “You’re ready. Your family can help only with the permissions you chose.”
+
+Success metrics
+Dose confirmation rate within 30 minutes of scheduled time.
+
+Percentage of missed doses resolved by caregiver escalation.
+
+Time needed for an elderly user to confirm a dose—target under 5 seconds.
+
+Appointment attendance and pre-visit preparation completion.
+
+Reduction in duplicate caregiver messages or manual medication lists.
+
+Task-completion rate and error rate in usability tests with users aged 65+.
+
+The most important UX decision is to make the elderly person’s primary screen action-oriented and calm: “What do I need to do now?”—while family and caretakers receive the coordination, history, and alerts needed to support them.
+
+How should the family dashboard look
+Design the medication confirmation flow
+Add voice commands for accessibility
+What onboarding flow works best here
+How do caregivers receive alerts
+
+⠦
+
+Pro
+Free preview of advanced search enabled.

@@ -1,0 +1,19 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"],
+      "@elderly-care/types": ["../../packages/types/src/index.ts"],
+      "@elderly-care/shared": ["../../packages/shared/src/index.ts"],
+      "@elderly-care/validation": ["../../packages/validation/src/index.ts"]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ]
+}
